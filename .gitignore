@@ -131,3 +131,6 @@ dmypy.json
 # My stuff
 compete_data/
 parkinson_venv
+files/
+models/
+catboost_info/
