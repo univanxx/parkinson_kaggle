@@ -2,7 +2,7 @@ import os
 import os.path
 from tqdm import tqdm
 from pathlib import Path
-from joblib import dump, load
+from joblib import dump
 
 import pandas as pd
 import numpy as np
