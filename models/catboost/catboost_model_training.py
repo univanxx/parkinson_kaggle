@@ -11,10 +11,10 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 
 
 
-if os.path.isfile('./files/batches.npy') and os.path.isfile('./files/batches.npy'):
-    with open('./files/batches.npy', 'rb') as f:
+if os.path.isfile('./files/batches_cb.npy') and os.path.isfile('./files/preds_cb.npy'):
+    with open('./files/batches_cb.npy', 'rb') as f:
         batches = np.load(f)
-    with open('./files/preds.npy', 'rb') as f:
+    with open('./files/preds_cb.npy', 'rb') as f:
         preds = np.load(f)
 else:
     all_dfs = []
@@ -49,9 +49,9 @@ else:
     preds = np.concatenate(preds, axis=0)
 
     Path("./files").mkdir(parents=True, exist_ok=True)
-    with open('./files/batches.npy', 'wb') as f:
+    with open('./files/batches_cb.npy', 'wb') as f:
         np.save(f, batches)
-    with open('./files/preds.npy', 'wb') as f:
+    with open('./files/preds_cb.npy', 'wb') as f:
         np.save(f, preds)
 
 X_train, X_validation, y_train, y_validation = train_test_split(batches, preds, train_size=0.85, random_state=42)
@@ -62,14 +62,14 @@ train_dataset = Pool(data=X_train,
 eval_dataset = Pool(data=X_validation,
                     label=y_validation)
 
-parameters = {'depth'         : [4,5],
-                'learning_rate' : [0.01],
-                'iterations'    : [10, 20]
+parameters = {'depth'         : [4,5,6,7,8,9, 10],
+                'learning_rate' : [0.01,0.02,0.03,0.04],
+                'iterations'    : [10, 20,30,40,50,60,70,80,90, 100]
                 }
 
 model = CatBoostClassifier(loss_function='MultiClass')
 
-Grid_CBC = GridSearchCV(estimator=model, param_grid = parameters, cv = 2, n_jobs=16, verbose=10)
+Grid_CBC = GridSearchCV(estimator=model, param_grid = parameters, cv = 2, verbose=3)
 Grid_CBC.fit(X_train, y_train)
 
 estimator = Grid_CBC.best_estimator_
