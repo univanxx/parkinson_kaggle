@@ -36,3 +36,22 @@ class MultiHeadAttention(nn.Module):
         for module in self.att_heads:
             res.append(torch.unsqueeze(module(x), axis=1))
         return self.W(torch.cat(res, axis=1).view(-1, self.seq_size, self.att_dim*self.num_heads))
+
+
+class TransformerBlock(nn.Module):
+    def __init__(self, num_heads, emb_dim, att_dim, seq_size, hidden_dim):
+        super(TransformerBlock, self).__init__()
+        self.attention = MultiHeadAttention(num_heads, emb_dim, att_dim, seq_size)
+        self.NormalizeFirst = nn.LayerNorm(emb_dim)
+        self.FFN = nn.Sequential(
+            nn.Linear(emb_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, emb_dim)
+        )
+        self.NormalizeLast = nn.LayerNorm(emb_dim)
+
+    def forward(self, x):
+        x_transformed = self.attention(x)
+        x_next = self.NormalizeFirst(x + x_transformed)
+        x_transformed = self.FFN(x_next)
+        return self.NormalizeLast(x_transformed + x_next)
