@@ -12,6 +12,8 @@ def get_data(max_len=62):
             batches = np.load(f)
         with open('./files/preds.npy', 'rb') as f:
             preds = np.load(f)
+        with open('./files/masks.npy', 'rb') as f:
+            masks = np.load(f)
         return batches, masks, preds
     else:
         all_dfs = []
