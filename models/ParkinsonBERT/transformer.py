@@ -4,6 +4,52 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class PositionalEmbedding(nn.Module):
+
+    def __init__(self, embed_size, max_len=62):
+        super().__init__()
+
+        pe = torch.zeros(max_len+2, embed_size).float()
+        pe.require_grad = False
+
+        position = torch.arange(0, max_len+2).float()
+
+        div_term = (torch.arange(0, embed_size, 2).float() * -(math.log(10000.0) / embed_size)).exp()
+        pe[:, 0] = torch.sin(position / (10000**(2*0 / 3)))
+        pe[:, 1] = torch.cos(position / (10000**(2*0 / 3)))
+        pe[:, 2] = torch.sin(position / (10000**(2*1 / 3)))
+
+        pe = pe.unsqueeze(0)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        return x + self.pe
+
+    
+class BERTEmbedding(torch.nn.Module):
+    """
+    BERT Embedding which is consisted with under features
+        2. PositionalEmbedding : adding positional information using sin, cos
+        sum of all these features are output of BERTEmbedding
+    """
+
+    def __init__(self, embed_size=3, seq_len=62):
+        """
+        :param embed_size: embedding size of token embedding
+        :param dropout: dropout rate
+        """
+
+        super().__init__()
+        self.embed_size = embed_size
+        # self.pos_embed = nn.Embedding(seq_len, embed_size)
+        self.position = PositionalEmbedding(embed_size=embed_size, max_len=seq_len)
+        # self.dropout = torch.nn.Dropout(p=dropout)
+       
+    def forward(self, sequence):
+        x = self.position(sequence)
+        return x#self.dropout(x)
+
+
 class Attention(nn.Module):
     def __init__(self, emb_dim, att_dim):
         super().__init__()
@@ -12,14 +58,19 @@ class Attention(nn.Module):
         self.v_matr = nn.Linear(emb_dim, att_dim)
         self.att_dim = att_dim
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         """
         x - input, shape = (B, seq_len, 3)
         """
         q = self.q_matr(x)
         k = self.k_matr(x)
         v = self.v_matr(x)
-        return torch.matmul(F.softmax(torch.matmul(q, torch.swapaxes(k, 1, 2))/math.sqrt(self.att_dim), dim=-1), v)
+
+        qkmatmul = torch.matmul(q, torch.swapaxes(k, 1, 2))/math.sqrt(self.att_dim)
+        if mask is not None:
+            qkmatmul = qkmatmul.masked_fill(mask == 0, -1e9)
+
+        return torch.matmul(F.softmax(qkmatmul, dim=-1), v)
 
 
 class MultiHeadAttention(nn.Module):
@@ -31,11 +82,11 @@ class MultiHeadAttention(nn.Module):
         self.num_heads = num_heads
         self.att_dim = att_dim
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         res = []
         for module in self.att_heads:
-            res.append(torch.unsqueeze(module(x), axis=1))
-        return self.W(torch.cat(res, axis=1).view(-1, self.seq_size, self.att_dim*self.num_heads))
+            res.append(module(x, mask))
+        return self.W(torch.cat(res, axis=2).view(-1, self.seq_size, self.att_dim*self.num_heads))
 
 
 class TransformerBlock(nn.Module):
@@ -50,8 +101,33 @@ class TransformerBlock(nn.Module):
         )
         self.NormalizeLast = nn.LayerNorm(emb_dim)
 
-    def forward(self, x):
-        x_transformed = self.attention(x)
+    def forward(self, x, mask=None):
+        x_transformed = self.attention(x, mask)
         x_next = self.NormalizeFirst(x + x_transformed)
         x_transformed = self.FFN(x_next)
         return self.NormalizeLast(x_transformed + x_next)
+
+
+class NERHead(nn.Module):
+    def __init__(self, emb_size, num_classes):
+        super(NERHead, self).__init__()
+        self.classification_layer = nn.Sequential(
+            nn.Linear(emb_size, num_classes),
+            nn.ReLU()
+        )
+    def forward(self, x):
+        preds = self.classification_layer(x)
+        return preds
+
+
+class BERT4Park(nn.Module):
+    def __init__(self, num_blocks=4, num_heads=2, emb_dim=3, att_dim=4, seq_size=62, hidden_dim=4*4, num_classes=4):
+        super().__init__()
+        self.embedding = BERTEmbedding(emb_dim, seq_size)
+        self.transformer_blocks = nn.ModuleList([TransformerBlock(num_heads, emb_dim, att_dim, seq_size+2, hidden_dim) for _ in range(num_blocks)])
+        self.classification = NERHead(emb_dim, num_classes)
+    def forward(self,x):
+        x = self.embedding(x)
+        for transformer in self.transformer_blocks:
+            x = transformer(x)
+        return self.classification(x)
