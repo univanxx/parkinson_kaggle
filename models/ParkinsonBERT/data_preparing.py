@@ -39,16 +39,27 @@ def get_data(max_len=62):
         for df_i in tqdm(all_dfs):
             for idx in range(df_i.shape[0] // max_len):
                 batches.append((df_i.iloc[idx*max_len:(idx+1)*max_len, 1:4].to_numpy())[None,:,:])
-                batches[-1] = np.insert(batches[-1], 0, np.ones([1,batches[-1].shape[-1]])[None,:,:], axis=1)
-                batches[-1] = np.insert(batches[-1], batches[-1].shape[1], -np.ones([1,batches[-1].shape[-1]])[None,:,:], axis=1)
+                # start of a sequence
+                if idx == 0:
+                    batches[-1] = np.insert(batches[-1], 0, np.ones([1,batches[-1].shape[-1]])[None,:,:], axis=1)
+                else:
+                    batches[-1] = np.insert(batches[-1], 0, 2 * np.ones([1,batches[-1].shape[-1]])[None,:,:], axis=1)
+                # end of a sequence
+                if idx == df_i.shape[0] // max_len - 1 and df_i.shape[0] % max_len == 0:
+                    batches[-1] = np.insert(batches[-1], batches[-1].shape[1], -np.ones([1,batches[-1].shape[-1]])[None,:,:], axis=1)
+                # continue of a sequence
+                else:
+                    batches[-1] = np.insert(batches[-1], batches[-1].shape[1], 2 * np.ones([1,batches[-1].shape[-1]])[None,:,:], axis=1)
                 preds.append((df_i.iloc[idx*max_len:(idx+1)*max_len,  -1].to_numpy())[None,:])
                 masks.append(np.ones((max_len+2,max_len+2))[None,:,:])
             if df_i.shape[0] % max_len != 0:
                 last_batch = np.zeros((max_len, 3))
                 last_batch[:(df_i.shape[0] % max_len), :] = df_i.iloc[-(df_i.shape[0] % max_len):, 1:4].to_numpy()
                 batches.append(last_batch[None,:,:])
-                batches[-1] = np.insert(batches[-1], 0, np.ones([1,batches[-1].shape[-1]])[None,:,:], axis=1)
-                batches[-1] = np.insert(batches[-1], df_i.shape[0] % max_len, -2 * np.ones([1,batches[-1].shape[-1]])[None,:,:], axis=1)
+                # continue of a sequence
+                batches[-1] = np.insert(batches[-1], 0, 2 * np.ones([1,batches[-1].shape[-1]])[None,:,:], axis=1)
+                # end of a sequence
+                batches[-1] = np.insert(batches[-1], df_i.shape[0] % max_len + 1, -np.ones([1,batches[-1].shape[-1]])[None,:,:], axis=1)
                 masks.append(np.ones((max_len+2,max_len+2))[None,:,:])
                 masks[-1][:, :, 1 + (df_i.shape[0] % max_len):-1].fill(0)
                 masks[-1][:, 1 + (df_i.shape[0] % max_len):-1, :].fill(0)
