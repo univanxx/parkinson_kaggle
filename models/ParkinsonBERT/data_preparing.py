@@ -82,3 +82,16 @@ def get_data(max_len=62):
         with open('./files/masks.npy', 'wb') as f:
             np.save(f, masks)
         return batches, masks, preds
+
+
+class ParkinsonDataset(Dataset):
+    def __init__(self, batches, preds, masks):
+        self.values = batches
+        self.targets = preds
+        self.masks = masks
+
+    def __len__(self):
+        return self.targets.shape[0]
+
+    def __getitem__(self, idx):
+        return {'value': self.values[idx], 'target': np.identity(4)[self.targets[idx].astype(int)], 'mask': self.masks[idx]}
