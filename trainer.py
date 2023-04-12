@@ -10,6 +10,7 @@ import torch.nn.functional as F
 
 from models.ParkinsonBERT.transformer import BERT4Park
 from models.ParkinsonBERT.data_preparing import get_data, ParkinsonDataset
+from BERT_pytorch.bert_pytorch.trainer.optim_schedule import ScheduledOptim
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning) 
@@ -70,6 +71,7 @@ class Trainer():
         # self.device = torch.device("cuda:" + str(args.cuda_id) if torch.cuda.is_available() else "cpu")
         # self.model = (self.model.double()).to(self.device)
         self.optimizer = optim.AdamW(self.model.parameters(), lr=args.lr)
+        self.scheduler = ScheduledOptim(self.optimizer, 5, n_warmup_steps=100)
         self.loss = nn.BCELoss().cuda(gpu)
 
         os.makedirs("./summary", exist_ok=True)
@@ -89,7 +91,11 @@ class Trainer():
                     self.optimizer.zero_grad()
                     logits = self.model(batch['value'], batch['mask'])[:,1:-1,:]
                     loss = self.loss(logits, batch['target'])
+
+                    self.scheduler.zero_grad()
                     loss.backward()
+                    self.scheduler.step_and_update_lr()
+
                     self.optimizer.step()
                     self.writer.add_scalar("Train Loss", loss.item(), global_step=self.global_step)
                     self.writer.add_scalar("Train Macro AP", average_precision_score(batch['target'].reshape(batch['target'].shape[0] * batch['target'].shape[1], 4).cpu().detach(), logits.reshape(logits.shape[0] * logits.shape[1], 4).cpu().detach(), average='macro'), global_step=self.global_step)
