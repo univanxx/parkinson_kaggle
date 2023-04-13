@@ -8,28 +8,30 @@ from pathlib import Path
 
 
 def get_data(max_len=62):
-    if os.path.isfile('./files/batches.npy') and os.path.isfile('./files/batches.npy'):
-        with open('./files/batches.npy', 'rb') as f:
+    savedir = "./files/len_" + str(max_len)
+    Path(savedir).mkdir(parents=True, exist_ok=True)
+    if os.path.isfile(savedir + '/batches.npy') and os.path.isfile(savedir + '/batches.npy') and os.path.isfile(savedir + '/masks.npy'):
+        with open(savedir + '/batches.npy', 'rb') as f:
             batches = np.load(f)
-        with open('./files/preds.npy', 'rb') as f:
+        with open(savedir + '/preds.npy', 'rb') as f:
             preds = np.load(f)
-        with open('./files/masks.npy', 'rb') as f:
+        with open(savedir + '/masks.npy', 'rb') as f:
             masks = np.load(f)
         return batches, masks, preds
     else:
         all_dfs = []
         label2id = {"StartHesitation":0, "Turn":1, "Walking":2, "None":3}
 
-        for file in tqdm(os.listdir("./compete_data/train/defog/")):
-            df = pd.read_csv("./compete_data/train/defog/" + file)
+        for file in tqdm(os.listdir("./parkinson_data/train/defog/")):
+            df = pd.read_csv("./parkinson_data/train/defog/" + file)
             df = df[df.Task == True][['Time', 'AccV', 'AccML', 'AccAP', 'StartHesitation', 'Turn', 'Walking']]
             df['None'] = 1 - df.iloc[:,4:].sum(axis=1)
             df = df.rename(columns=label2id)
             df['y'] = df.iloc[:,4:].idxmax(axis=1)
             all_dfs.append(df)
 
-        for file in tqdm(os.listdir("./compete_data/train/tdcsfog/")):
-            df = pd.read_csv("./compete_data/train/tdcsfog/" + file)
+        for file in tqdm(os.listdir("./parkinson_data/train/tdcsfog/")):
+            df = pd.read_csv('./parkinson_data/train/tdcsfog/' + file)
             df['None'] = 1 - df.iloc[:,4:].sum(axis=1)
             df = df.rename(columns=label2id)
             df['y'] = df.iloc[:,4:].idxmax(axis=1)
@@ -76,11 +78,11 @@ def get_data(max_len=62):
         preds = np.concatenate(preds, axis=0)
 
         Path("./files").mkdir(parents=True, exist_ok=True)
-        with open('./files/batches.npy', 'wb') as f:
+        with open(savedir + '/batches.npy', 'wb') as f:
             np.save(f, batches)
-        with open('./files/preds.npy', 'wb') as f:
+        with open(savedir + '/preds.npy', 'wb') as f:
             np.save(f, preds)
-        with open('./files/masks.npy', 'wb') as f:
+        with open(savedir + '/amsks.npy', 'wb') as f:
             np.save(f, masks)
         return batches, masks, preds
 
