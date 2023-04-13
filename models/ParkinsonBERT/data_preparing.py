@@ -82,7 +82,7 @@ def get_data(max_len=62):
             np.save(f, batches)
         with open(savedir + '/preds.npy', 'wb') as f:
             np.save(f, preds)
-        with open(savedir + '/amsks.npy', 'wb') as f:
+        with open(savedir + '/masks.npy', 'wb') as f:
             np.save(f, masks)
         return batches, masks, preds
 
