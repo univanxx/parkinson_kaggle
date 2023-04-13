@@ -129,6 +129,7 @@ dmypy.json
 .pyre/
 
 # My stuff
+parkinson_data/
 compete_data/
 parkinson_venv
 files/
