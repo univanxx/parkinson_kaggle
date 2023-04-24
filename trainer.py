@@ -74,7 +74,7 @@ class Trainer():
         # self.model = (self.model.double()).to(self.device)
         self.optimizer = optim.AdamW(self.model.parameters(), lr=args.lr)
         # self.scheduler = ScheduledOptim(self.optimizer, 5, n_warmup_steps=100)
-        self.loss = nn.BCELoss()#.cuda(gpu)
+        self.loss = nn.NLLLoss()#.cuda(gpu)
 
         os.makedirs("./summary", exist_ok=True)
         os.makedirs("./model", exist_ok=True)
@@ -84,7 +84,7 @@ class Trainer():
 
     def train(self):
         best_val = -38
-        for epoch in tqdm(range(self.num_epochs)):
+        for epoch in range(self.num_epochs):
             logging.info(f"Epoch number {epoch} started")
             # training
             self.model.train()
@@ -93,12 +93,11 @@ class Trainer():
                     batch = {k: v.to(self.device) for k, v in batch.items()}  # v.cuda(non_blocking=True)
                     self.optimizer.zero_grad()
                     logits = self.model(batch['value'], batch['mask'])[:,1:-1,:]
-                    loss = self.loss(logits, batch['target'])
 
+                    loss = self.loss(logits.flatten(start_dim=0, end_dim=1), batch['target'].argmax(axis=2).flatten())
                     # self.scheduler.zero_grad()
                     loss.backward()
                     # self.scheduler.step_and_update_lr()
-
                     self.optimizer.step()
                     self.writer.add_scalar("Train Loss", loss.item(), global_step=self.global_step)
                     self.writer.add_scalar("Train Macro AP", average_precision_score(batch['target'].reshape(batch['target'].shape[0] * batch['target'].shape[1], 4).cpu().detach(), logits.reshape(logits.shape[0] * logits.shape[1], 4).cpu().detach(), average='macro'), global_step=self.global_step)
@@ -143,17 +142,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-n', '--nodes', default=1,
                         type=int, metavar='N')
-    parser.add_argument('-g', '--gpus', default=2, type=int,
+    parser.add_argument('-g', '--gpus', default=0, type=int,
                         help='number of gpus per node')
     parser.add_argument('-nr', '--nr', default=0, type=int,
                         help='ranking within the nodes')
-    parser.add_argument('--num_epochs', default=3, type=int, 
+    parser.add_argument('--num_epochs', default=100, type=int, 
                         help='number of total epochs to run')
-    parser.add_argument('--batch_size', default=256, type=int, 
+    parser.add_argument('--batch_size', default=64, type=int, 
                         help='batch_size')
     parser.add_argument('--lr', default=3e-3, type=float, 
                         help='learning rate')
-    parser.add_argument('--max_len', default=64, type=int, 
+    parser.add_argument('--max_len', default=512, type=int, 
                         help='sequence length')
     parser.add_argument('--random_state', default=42, type=int, 
                         help='random state')

@@ -113,7 +113,7 @@ class NERHead(nn.Module):
         super(NERHead, self).__init__()
         self.classification_layer = nn.Sequential(
             nn.Linear(emb_size, num_classes),
-            nn.Softmax(dim=2)
+            nn.LogSoftmax(dim=2)
         )
     def forward(self, x):
         preds = self.classification_layer(x)
@@ -121,7 +121,7 @@ class NERHead(nn.Module):
 
 
 class BERT4Park(nn.Module):
-    def __init__(self, num_blocks=4, num_heads=2, emb_dim=3, att_dim=4, seq_size=62, hidden_dim=4*4, num_classes=4):
+    def __init__(self, num_blocks=3, num_heads=5, emb_dim=3, att_dim=10, seq_size=62, hidden_dim=10*4, num_classes=4):
         super().__init__()
         self.embedding = BERTEmbedding(emb_dim, seq_size)
         self.transformer_blocks = nn.ModuleList([TransformerBlock(num_heads, emb_dim, att_dim, seq_size+2, hidden_dim) for _ in range(num_blocks)])
