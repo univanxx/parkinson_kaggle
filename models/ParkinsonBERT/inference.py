@@ -23,9 +23,7 @@ for k, v in state_dict.items():
 
 model.load_state_dict(new_state_dict)
 
-max_len = 62
-
-def predict(df, estimator):
+def predict(df, estimator, max_len=62):
 
     answer_matr = {
         0: [1,0,0],
@@ -37,6 +35,7 @@ def predict(df, estimator):
     # prepare data
     batches = []
     masks = []
+    inference_masks = []
 
     for idx in range(df.shape[0] // max_len):
         batches.append((df.iloc[idx*max_len:(idx+1)*max_len, :].to_numpy())[None,:,:])
@@ -52,6 +51,7 @@ def predict(df, estimator):
         else:
             batches[-1] = np.insert(batches[-1], batches[-1].shape[1], 2 * np.ones([1,batches[-1].shape[-1]])[None,:,:], axis=1)
         masks.append(np.ones((max_len+2,max_len+2))[None,:,:])
+        inference_masks.append(np.ones(max_len+2)[None,:])
     if df.shape[0] % max_len != 0:
         last_batch = np.zeros((max_len, 3))
         last_batch[:(df.shape[0] % max_len), :] = df.iloc[-(df.shape[0] % max_len):, :].to_numpy()
@@ -63,11 +63,14 @@ def predict(df, estimator):
         masks.append(np.ones((max_len+2,max_len+2))[None,:,:])
         masks[-1][:, :, 1 + (df.shape[0] % max_len):-1].fill(0)
         masks[-1][:, 1 + (df.shape[0] % max_len):-1, :].fill(0)
+        inference_masks.append(np.ones(max_len+2)[None,:])
+        inference_masks[-1][:, 1 + (df.shape[0] % max_len):-1].fill(0)
 
     batches = np.concatenate(batches, axis=0)
     masks = np.concatenate(masks, axis=0)   
+    inference_masks = np.concatenate(inference_masks, axis=0) 
 
-    res = estimator(torch.Tensor(batches), torch.Tensor(masks)).argmax(axis=2)[:,1:-1].flatten()
+    res = np.exp(estimator(torch.Tensor(batches), torch.Tensor(masks))).argmax(axis=2)[:,1:-1].flatten()
     answer_df = []
     for res_i in res:
         answer_df.append(answer_matr[res_i.item()])
@@ -75,7 +78,7 @@ def predict(df, estimator):
     answer_df = pd.DataFrame(answer_df, columns=['StartHesitation', 'Turn', 'Walking'])
     answer_df = answer_df.reset_index().rename(columns={'index': 'Id'})
     answer_df['Id'] = data[:data.rfind('.')] + '_' + answer_df['Id'].astype(str)
-    return answer_df
+    return answer_df, inference_masks
     
 submission = []
 
