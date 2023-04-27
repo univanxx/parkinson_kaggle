@@ -10,3 +10,5 @@ datasets
 transformers
 evaluate
 tensorboard
+tsflex
+seglearn
