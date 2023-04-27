@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
+import torch
 
 import os
 from tqdm import tqdm
@@ -97,4 +98,6 @@ class ParkinsonDataset(Dataset):
         return self.targets.shape[0]
 
     def __getitem__(self, idx):
-        return {'value': self.values[idx], 'target': np.identity(4)[self.targets[idx].astype(int)], 'mask': self.masks[idx]}
+        return {'value': torch.tensor(self.values[idx], dtype=torch.float32),
+                'target': torch.tensor(np.identity(4)[self.targets[idx].astype(int)], dtype=torch.float32), 
+                'mask': torch.tensor(self.masks[idx], dtype=torch.float32)}
