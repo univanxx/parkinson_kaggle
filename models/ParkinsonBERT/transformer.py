@@ -9,12 +9,11 @@ class PositionalEmbedding(nn.Module):
     def __init__(self, embed_size, max_len=62):
         super().__init__()
 
-        pe = torch.zeros(max_len+2, embed_size).float()
+        pe = torch.zeros(max_len+2, embed_size, dtype=torch.float32)
         pe.require_grad = False
 
-        position = torch.arange(0, max_len+2).float()
+        position = torch.arange(0, max_len+2, dtype=torch.float32)
 
-        div_term = (torch.arange(0, embed_size, 2).float() * -(math.log(10000.0) / embed_size)).exp()
         pe[:, 0] = torch.sin(position / (10000**(2*0 / 3)))
         pe[:, 1] = torch.cos(position / (10000**(2*0 / 3)))
         pe[:, 2] = torch.sin(position / (10000**(2*1 / 3)))
@@ -126,7 +125,13 @@ class BERT4Park(nn.Module):
         self.embedding = BERTEmbedding(emb_dim, seq_size)
         self.transformer_blocks = nn.ModuleList([TransformerBlock(num_heads, emb_dim, att_dim, seq_size+2, hidden_dim) for _ in range(num_blocks)])
         self.classification = NERHead(emb_dim, num_classes)
-    def forward(self,x, mask=None):
+        self.tokens = nn.ParameterDict({"start": nn.Parameter(torch.rand(emb_dim), requires_grad=True),
+                       "cont": nn.Parameter(torch.rand(emb_dim), requires_grad=True),
+                       "end": nn.Parameter(torch.rand(emb_dim), requires_grad=True)})
+    def forward(self, x, device, mask=None):
+        # x[(x == torch.tensor([1, 1, 1], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["start"]
+        # x[(x == torch.tensor([2, 2, 2], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["cont"]
+        # x[(x == torch.tensor([-1, -1, -1], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["end"]
         x = self.embedding(x)
         for transformer in self.transformer_blocks:
             x = transformer(x, mask)

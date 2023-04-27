@@ -4,7 +4,8 @@ from sklearn.model_selection import train_test_split
 
 from torch.utils.data import DataLoader
 import torch
-import math
+torch.set_default_dtype(torch.float32)
+
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -46,7 +47,7 @@ class Trainer():
         # if bert_params is not None:
         #     self.model = BERT4Park(**bert_params)
         # else:
-        self.model = BERT4Park(seq_size=args.max_len).double()
+        self.model = BERT4Park(seq_size=args.max_len)#.double()
         self.device = torch.device("cuda:{}".format(gpu))
         self.model.to(self.device)
         # torch.cuda.set_device(gpu)
@@ -78,7 +79,7 @@ class Trainer():
 
         os.makedirs("./summary", exist_ok=True)
         os.makedirs("./model", exist_ok=True)
-        self.writer = SummaryWriter("./summary")
+        self.writer = SummaryWriter("./summary/model_{}".format(args.exp_num))
         self.global_step = 1
         self.num_epochs = args.num_epochs
 
@@ -92,15 +93,15 @@ class Trainer():
                 for batch in self.train_loader:
                     batch = {k: v.to(self.device) for k, v in batch.items()}  # v.cuda(non_blocking=True)
                     self.optimizer.zero_grad()
-                    logits = self.model(batch['value'], batch['mask'])[:,1:-1,:]
-
+                    # with torch.cuda.amp.autocast():
+                    logits = self.model(batch['value'], self.device, batch['mask'])[:,1:-1,:]
                     loss = self.loss(logits.flatten(start_dim=0, end_dim=1), batch['target'].argmax(axis=2).flatten())
                     # self.scheduler.zero_grad()
                     loss.backward()
                     # self.scheduler.step_and_update_lr()
                     self.optimizer.step()
                     self.writer.add_scalar("Train Loss", loss.item(), global_step=self.global_step)
-                    self.writer.add_scalar("Train Macro AP", average_precision_score(batch['target'].reshape(batch['target'].shape[0] * batch['target'].shape[1], 4).cpu().detach(), logits.reshape(logits.shape[0] * logits.shape[1], 4).cpu().detach(), average='macro'), global_step=self.global_step)
+                    self.writer.add_scalar("Train Macro AP", average_precision_score(batch['target'].reshape(batch['target'].shape[0] * batch['target'].shape[1], 4)[:,:3].cpu().detach(), logits.reshape(logits.shape[0] * logits.shape[1], 4)[:,:3].cpu().detach(), average='macro'), global_step=self.global_step)
                     self.global_step += 1
                     pbar.update(1)
             logging.info(f"Epoch finished! Global step = {self.global_step}")
@@ -111,8 +112,8 @@ class Trainer():
                 with torch.no_grad():
                     for batch in self.val_loader:
                         batch = {k: v.to(self.device) for k, v in batch.items()}
-                        logits = self.model(batch['value'], batch['mask'])[:,1:-1,:]
-                        val_loss.append(average_precision_score(batch['target'].reshape(batch['target'].shape[0] * batch['target'].shape[1], 4).cpu().detach(), logits.reshape(logits.shape[0] * logits.shape[1], 4).cpu().detach(), average='macro'))
+                        logits = self.model(batch['value'], self.device, batch['mask'])[:,1:-1,:]
+                        val_loss.append(average_precision_score(batch['target'].reshape(batch['target'].shape[0] * batch['target'].shape[1], 4)[:,:3].cpu().detach(), logits.reshape(logits.shape[0] * logits.shape[1], 4)[:,:3].cpu().detach(), average='macro'))
                         pbar.update(1)
             if np.mean(val_loss) > best_val:
                 torch.save(self.model.state_dict(), "./model/best_checkpoint.pth")
@@ -156,6 +157,8 @@ if __name__ == "__main__":
                         help='sequence length')
     parser.add_argument('--random_state', default=42, type=int, 
                         help='random state')
+    parser.add_argument('--exp_num', required=True, type=int, 
+                        help='experiment number')
     args = parser.parse_args()
     args.max_len = args.max_len - 2
     bert_train(args.gpus, args)
