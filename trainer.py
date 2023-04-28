@@ -124,12 +124,12 @@ class Trainer():
 
 def bert_train(gpu, args):
 
-    codebook = {
-        1: 'start',
-        2: 'cont',
-        -1: 'end'
-    }
-    label2id = {"StartHesitation":0, "Turn":1, "Walking":2, "None":3}
+    # codebook = {
+    #     1: 'start',
+    #     2: 'cont',
+    #     -1: 'end'
+    # }
+
     batches, masks, preds = get_data(max_len=args.max_len)
     X_train, X_validation, y_train, y_validation, masks_train, masks_validation = train_test_split(batches, preds, masks, train_size=0.85, random_state=args.random_state)
     data_train = ParkinsonDataset(X_train, y_train, masks_train)

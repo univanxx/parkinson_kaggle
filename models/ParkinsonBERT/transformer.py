@@ -120,7 +120,7 @@ class NERHead(nn.Module):
 
 
 class BERT4Park(nn.Module):
-    def __init__(self, num_blocks=3, num_heads=5, emb_dim=3, att_dim=10, seq_size=62, hidden_dim=10*4, num_classes=4):
+    def __init__(self, num_blocks=5, num_heads=7, emb_dim=3, att_dim=10, seq_size=62, hidden_dim=10*4, num_classes=4):
         super().__init__()
         self.embedding = BERTEmbedding(emb_dim, seq_size)
         self.transformer_blocks = nn.ModuleList([TransformerBlock(num_heads, emb_dim, att_dim, seq_size+2, hidden_dim) for _ in range(num_blocks)])
@@ -129,9 +129,9 @@ class BERT4Park(nn.Module):
                        "cont": nn.Parameter(torch.rand(emb_dim), requires_grad=True),
                        "end": nn.Parameter(torch.rand(emb_dim), requires_grad=True)})
     def forward(self, x, device, mask=None):
-        # x[(x == torch.tensor([1, 1, 1], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["start"]
-        # x[(x == torch.tensor([2, 2, 2], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["cont"]
-        # x[(x == torch.tensor([-1, -1, -1], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["end"]
+        x[(x == torch.tensor([1, 1, 1], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["start"]
+        x[(x == torch.tensor([2, 2, 2], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["cont"]
+        x[(x == torch.tensor([-1, -1, -1], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["end"]
         x = self.embedding(x)
         for transformer in self.transformer_blocks:
             x = transformer(x, mask)
