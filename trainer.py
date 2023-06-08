@@ -7,7 +7,7 @@ import torch
 torch.set_default_dtype(torch.float32)
 
 import torch.nn as nn
-import torch.nn.functional as F
+from focal_loss.focal_loss import FocalLoss
 
 from models.ParkinsonBERT.transformer import BERT4Park
 from models.ParkinsonBERT.data_preparing import get_data, ParkinsonDataset
@@ -32,7 +32,7 @@ import logging
 
 class Trainer():
     def __init__(self, train_dataset, val_dataset, args, gpu):
-        logging.basicConfig(level=logging.INFO, filename="./model/bert_log.log", filemode="a", format="%(asctime)s %(message)s")
+        logging.basicConfig(level=logging.INFO, filename="./model/bert_log.txt", filemode="a", format="%(asctime)s %(message)s")
         # torch.cuda.set_device(gpu)
 
         ############################################################
@@ -75,7 +75,8 @@ class Trainer():
         # self.model = (self.model.double()).to(self.device)
         self.optimizer = optim.AdamW(self.model.parameters(), lr=args.lr)
         # self.scheduler = ScheduledOptim(self.optimizer, 5, n_warmup_steps=100)
-        self.loss = nn.NLLLoss()#.cuda(gpu)
+        # self.loss = nn.NLLLoss(reduce=False)#.cuda(gpu)
+        self.loss = FocalLoss(gamma=0.7)
 
         os.makedirs("./summary", exist_ok=True)
         os.makedirs("./model", exist_ok=True)
@@ -94,7 +95,7 @@ class Trainer():
                     batch = {k: v.to(self.device) for k, v in batch.items()}  # v.cuda(non_blocking=True)
                     self.optimizer.zero_grad()
                     # with torch.cuda.amp.autocast():
-                    logits = self.model(batch['value'], self.device, batch['mask'])[:,1:-1,:]
+                    logits = self.model(batch['value'], batch['pats'], self.device, batch['mask'])[:,1:-1,:]
                     loss = self.loss(logits.flatten(start_dim=0, end_dim=1), batch['target'].argmax(axis=2).flatten())
                     # self.scheduler.zero_grad()
                     loss.backward()
@@ -112,7 +113,7 @@ class Trainer():
                 with torch.no_grad():
                     for batch in self.val_loader:
                         batch = {k: v.to(self.device) for k, v in batch.items()}
-                        logits = self.model(batch['value'], self.device, batch['mask'])[:,1:-1,:]
+                        logits = self.model(batch['value'], batch['pats'], self.device, batch['mask'])[:,1:-1,:]
                         val_loss.append(average_precision_score(batch['target'].reshape(batch['target'].shape[0] * batch['target'].shape[1], 4)[:,:3].cpu().detach(), logits.reshape(logits.shape[0] * logits.shape[1], 4)[:,:3].cpu().detach(), average='macro'))
                         pbar.update(1)
             if np.mean(val_loss) > best_val:
@@ -130,10 +131,11 @@ def bert_train(gpu, args):
     #     -1: 'end'
     # }
 
-    batches, masks, preds = get_data(max_len=args.max_len)
-    X_train, X_validation, y_train, y_validation, masks_train, masks_validation = train_test_split(batches, preds, masks, train_size=0.85, random_state=args.random_state)
-    data_train = ParkinsonDataset(X_train, y_train, masks_train)
-    data_val = ParkinsonDataset(X_validation, y_validation, masks_validation)      
+    batches, masks, preds, pats = get_data(max_len=args.max_len)
+    X_train, X_validation, y_train, y_validation, masks_train, masks_validation, pats_train, pats_validation = train_test_split(batches, preds, masks, pats, train_size=0.85, random_state=args.random_state)
+
+    data_train = ParkinsonDataset(X_train, y_train, masks_train, pats_train)
+    data_val = ParkinsonDataset(X_validation, y_validation, masks_validation, pats_validation)      
 
     train_class = Trainer(data_train, data_val, args, gpu)
     train_class.train()

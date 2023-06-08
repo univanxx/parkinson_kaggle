@@ -112,7 +112,7 @@ class NERHead(nn.Module):
         super(NERHead, self).__init__()
         self.classification_layer = nn.Sequential(
             nn.Linear(emb_size, num_classes),
-            nn.LogSoftmax(dim=2)
+            nn.Softmax(dim=2)
         )
     def forward(self, x):
         preds = self.classification_layer(x)
@@ -120,19 +120,27 @@ class NERHead(nn.Module):
 
 
 class BERT4Park(nn.Module):
-    def __init__(self, num_blocks=5, num_heads=7, emb_dim=3, att_dim=10, seq_size=62, hidden_dim=10*4, num_classes=4):
+    def __init__(self, num_blocks=4, num_heads=2, emb_dim=3, att_dim=4, seq_size=62, hidden_dim=4*4, num_classes=4):
         super().__init__()
         self.embedding = BERTEmbedding(emb_dim, seq_size)
         self.transformer_blocks = nn.ModuleList([TransformerBlock(num_heads, emb_dim, att_dim, seq_size+2, hidden_dim) for _ in range(num_blocks)])
-        self.classification = NERHead(emb_dim, num_classes)
-        self.tokens = nn.ParameterDict({"start": nn.Parameter(torch.rand(emb_dim), requires_grad=True),
-                       "cont": nn.Parameter(torch.rand(emb_dim), requires_grad=True),
-                       "end": nn.Parameter(torch.rand(emb_dim), requires_grad=True)})
-    def forward(self, x, device, mask=None):
-        x[(x == torch.tensor([1, 1, 1], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["start"]
-        x[(x == torch.tensor([2, 2, 2], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["cont"]
-        x[(x == torch.tensor([-1, -1, -1], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["end"]
+        self.classification = NERHead(hidden_dim // 2 + emb_dim, num_classes)
+        self.features = nn.Sequential(
+            nn.Linear(6, hidden_dim),
+            nn.ELU(),
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.ReLU()
+        )
+        # self.tokens = nn.ParameterDict({"start": nn.Parameter(torch.rand(emb_dim), requires_grad=True),
+        #                "cont": nn.Parameter(torch.rand(emb_dim), requires_grad=True),
+        #                "end": nn.Parameter(torch.rand(emb_dim), requires_grad=True)})
+    def forward(self, x, features, mask=None):
+        # x[(x == torch.tensor([1, 1, 1], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["start"]
+        # x[(x == torch.tensor([2, 2, 2], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["cont"]
+        # x[(x == torch.tensor([-1, -1, -1], dtype=torch.float32).to(device)).all(axis=1).nonzero().flatten()] = self.tokens["end"]
         x = self.embedding(x)
         for transformer in self.transformer_blocks:
             x = transformer(x, mask)
+        features = self.features(features)
+        x = torch.cat([x,features[:,None,:].repeat(1,x.shape[1],1)],2)
         return self.classification(x)
